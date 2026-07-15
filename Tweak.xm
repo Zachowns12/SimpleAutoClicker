@@ -171,9 +171,13 @@ static void SAC_spawn(void) {
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if ([scene isKindOfClass:UIWindowScene.class] && scene.activationState == UISceneActivationStateForegroundActive) { active = (UIWindowScene *)scene; break; }
     }
+    if (!active) return;
     gPanel = [[SAC_Panel alloc] initWithScene:active];
 }
 
 %ctor {
+    NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
+    if ([bid isEqualToString:@"com.apple.springboard"]) return;
+    if ([bid hasPrefix:@"com.apple."]) return;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ SAC_spawn(); });
 }
