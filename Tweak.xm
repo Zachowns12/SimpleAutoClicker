@@ -54,6 +54,43 @@ static void SAC_tap(CGPoint p) {
 }
 @end
 
+// Small always-visible toggle button
+@interface SAC_Toggle : UIWindow
+@property (nonatomic, copy) void (^onTap)(void);
+@end
+@implementation SAC_Toggle
+- (instancetype)initWithScene:(UIWindowScene *)scene {
+    self = [super initWithFrame:CGRectMake(8, 120, 52, 52)];
+    if (!self) return self;
+    if (scene) self.windowScene = scene;
+    self.windowLevel = UIWindowLevelAlert + 1500;
+    self.backgroundColor = [UIColor clearColor];
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
+    b.frame = self.bounds;
+    b.backgroundColor = [UIColor colorWithRed:0.15 green:0.5 blue:0.85 alpha:0.92];
+    b.layer.cornerRadius = 26;
+    [b setTitle:@"AC" forState:UIControlStateNormal];
+    [b setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    [b addTarget:self action:@selector(tapped) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:b];
+    [self addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(drag:)]];
+    self.hidden = NO;
+    return self;
+}
+- (void)tapped { if (self.onTap) self.onTap(); }
+- (void)drag:(UIPanGestureRecognizer *)g {
+    CGPoint t = [g translationInView:self];
+    CGRect f = self.frame;
+    f.origin.x += t.x; f.origin.y += t.y;
+    self.frame = f;
+    [g setTranslation:CGPointZero inView:self];
+}
+- (UIView *)hitTest:(CGPoint)pt withEvent:(UIEvent *)e {
+    return CGRectContainsPoint(self.bounds, pt) ? [super hitTest:pt withEvent:e] : nil;
+}
+@end
+
 @interface SAC_Panel : UIWindow
 @property (nonatomic, strong) UIView   *card;
 @property (nonatomic, strong) UILabel  *targetLabel;
@@ -64,10 +101,11 @@ static void SAC_tap(CGPoint p) {
 @property (nonatomic, assign) NSTimeInterval interval;
 @property (nonatomic, assign) BOOL      running;
 @property (nonatomic, strong) SAC_Catcher *catcher;
+- (void)toggleVisible;
 @end
 @implementation SAC_Panel
 - (instancetype)initWithScene:(UIWindowScene *)scene {
-    self = [super initWithFrame:CGRectMake(20, 90, 210, 176)];
+    self = [super initWithFrame:CGRectMake(70, 120, 210, 176)];
     if (!self) return self;
     if (scene) self.windowScene = scene;
     self.windowLevel = UIWindowLevelAlert + 1000;
@@ -95,7 +133,7 @@ static void SAC_tap(CGPoint p) {
     self.startBtn = [self mkBtn:@"START" frame:CGRectMake(10, 142, 190, 30) action:@selector(toggle)];
     self.startBtn.backgroundColor = [UIColor colorWithRed:0.15 green:0.6 blue:0.25 alpha:1];
     [self.card addSubview:self.startBtn];
-    self.hidden = NO;
+    self.hidden = YES;   // hidden until the AC button is tapped
     return self;
 }
 - (UILabel *)mkLabel:(CGRect)f {
@@ -121,6 +159,7 @@ static void SAC_tap(CGPoint p) {
     self.targetLabel.text = [NSString stringWithFormat:@"Target: %.0f, %.0f", self.target.x, self.target.y];
     self.rateLabel.text = [NSString stringWithFormat:@"Interval: %.0f ms", self.interval * 1000.0];
 }
+- (void)toggleVisible { self.hidden = !self.hidden; }
 - (UIView *)hitTest:(CGPoint)pt withEvent:(UIEvent *)e {
     UIView *v = [super hitTest:pt withEvent:e];
     return (v == self) ? nil : v;
@@ -164,20 +203,22 @@ static void SAC_tap(CGPoint p) {
 - (void)fire { SAC_tap(self.target); }
 @end
 
-static SAC_Panel *gPanel = nil;
+static SAC_Panel  *gPanel  = nil;
+static SAC_Toggle *gToggle = nil;
 static void SAC_spawn(void) {
-    if (gPanel) return;
+    if (gToggle) return;
     UIWindowScene *active = nil;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if ([scene isKindOfClass:UIWindowScene.class] && scene.activationState == UISceneActivationStateForegroundActive) { active = (UIWindowScene *)scene; break; }
     }
     if (!active) return;
-    gPanel = [[SAC_Panel alloc] initWithScene:active];
+    gPanel  = [[SAC_Panel alloc] initWithScene:active];
+    gToggle = [[SAC_Toggle alloc] initWithScene:active];
+    gToggle.onTap = ^{ if (gPanel) [gPanel toggleVisible]; };
 }
 
 %ctor {
     NSString *bid = [[NSBundle mainBundle] bundleIdentifier];
     if ([bid isEqualToString:@"com.apple.springboard"]) return;
-    if ([bid hasPrefix:@"com.apple."]) return;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ SAC_spawn(); });
 }
